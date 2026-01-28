@@ -1,0 +1,120 @@
+/* src/app/features/combat/combat-view.component.scss */
+
+// 1. 整體容器與版面
+.combat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 20px;
+  background-color: #222;
+  color: white;
+  gap: 10px; // 區塊間的間距
+}
+
+// 2. 上方與下方區域 (怪物/玩家)
+.unit-area {
+  padding: 20px;
+  border: 1px solid #555;
+  border-radius: 8px;
+  text-align: center;
+  
+  &.enemy-area { background-color: #333; }
+  &.player-area { background-color: #2a2a2a; margin-top: auto; } // 推到底部
+}
+
+// 3. 狀態條共用容器 (血條/魔力/盾)
+.bar-container {
+  width: 100%;
+  height: 20px;
+  background: #000;
+  margin: 5px 0;
+  position: relative;
+  border-radius: 4px;
+  overflow: hidden;
+
+  .text {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    top: 0;
+    font-size: 12px;
+    text-shadow: 1px 1px 1px black;
+    line-height: 20px; // 垂直置中文字
+    z-index: 2;
+  }
+}
+
+// 4. 各種條的顏色與動畫
+.hp-bar { height: 100%; background: #e74c3c; transition: width 0.2s; }
+.mp-bar { height: 100%; background: #3498db; transition: width 0.2s; }
+.shield-bar { height: 100%; background: #fff; transition: width 0.2s; }
+.shield-bar.broken { background: #555; } /* 破盾變灰 */
+
+.mp-container { margin-top: 5px; } // 微調 MP 條距離
+
+// 5. 中間戰鬥紀錄區
+.log-area {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px dashed #444;
+  padding: 10px;
+  font-size: 14px;
+  color: #ccc;
+  min-height: 100px; // 防止縮得太小
+}
+
+// 6. 按鈕區塊排版 (Flexbox)
+.actions {
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column; 
+  gap: 10px;
+}
+
+.combat-btns {
+  display: flex; // 橫向排列
+  gap: 10px;
+  width: 100%;
+}
+
+// 7. 按鈕樣式 (合併後的最終版)
+button {
+  flex: 1; // 自動填滿寬度
+  padding: 12px 0;
+  font-size: 16px;
+  cursor: pointer;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  margin: 0; // 用 gap 控制間距，所以這裡設 0
+
+  &:disabled { background: #555; cursor: not-allowed; }
+  
+  &.skill-btn { background: #e74c3c; } // 紅色按鈕
+
+  &.guard-btn { background: #2ecc71; }
+  
+  &.reset-btn { 
+    background: #e67e22; // 橘色按鈕
+    width: 100%;
+    padding: 8px;
+    font-size: 14px;
+  }
+}
+
+.status-text.charging {
+  color: #ff5252; /* 鮮紅色 */
+  font-size: 18px;
+  animation: shake 0.5s infinite; /* 讓字體抖動，增加緊張感 */
+}
+
+// 8. 文字特效
+.status-text { color: yellow; font-weight: bold; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes shake {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 0); }
+  75% { transform: translate(2px, 0); }
+  100% { transform: translate(0, 0); }
+}

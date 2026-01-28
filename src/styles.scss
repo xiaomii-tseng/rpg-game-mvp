@@ -1,1 +1,17 @@
-/* You can add global styles to this file, and also import other style files */
+@use 'styles/variables' as *;
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+// 這裡寫全域重置 (Reset CSS)
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background-color: #1a1a1a; // 預設深色背景
+  color: white;
+  font-family: sans-serif;
+}

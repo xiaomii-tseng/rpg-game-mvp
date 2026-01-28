@@ -1,0 +1,26 @@
+.float-text {
+  position: absolute;
+  font-weight: bold;
+  font-size: 24px;
+  pointer-events: none; // 讓滑鼠可以直接穿透，不會擋到按鈕
+  animation: floatUp 1s ease-out forwards;
+  z-index: 999;
+  text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; // 黑色描邊
+
+  &.damage { color: #ff5252; }       // 紅色
+  &.critical { color: #ffb142; font-size: 32px; } // 橘色大字
+  &.heal { color: #2ecc71; }         // 綠色
+  &.break { color: #f1c40f; font-size: 36px; animation: shake 0.5s; } // 黃色+震動
+}
+
+@keyframes floatUp {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-50px) scale(1.2); }
+}
+
+@keyframes shake {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-5px, 0); }
+  75% { transform: translate(5px, 0); }
+  100% { transform: translate(0, 0); }
+}

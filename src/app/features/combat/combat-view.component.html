@@ -1,0 +1,73 @@
+<div class="combat-container">
+
+  <app-damage-text *ngFor="let text of floatingTexts()" [value]="text.value" [type]="text.type" [x]="text.x"
+    [y]="text.y">
+  </app-damage-text>
+
+  <div class="unit-area enemy-area">
+    <h2>{{ combat.enemy().name }}</h2>
+    <div *ngIf="combat.enemy().isCharging" class="status-text charging">
+      🔥 蓄力中 (準備釋放必殺技！) 🔥
+    </div>
+    <div class="bar-container">
+      <div class="hp-bar" [style.width.%]="(combat.enemy().hp / combat.enemy().maxHp) * 100"></div>
+      <span class="text">{{ combat.enemy().hp }} / {{ combat.enemy().maxHp }}</span>
+    </div>
+
+    <div class="bar-container shield-container">
+      <div class="shield-bar" [class.broken]="combat.enemy().isBroken"
+        [style.width.%]="(combat.enemy().shield / combat.enemy().maxShield) * 100">
+      </div>
+      <span class="text">Shield: {{ combat.enemy().shield }}</span>
+    </div>
+
+    <div *ngIf="combat.enemy().isBroken" class="status-text">⚠️ BREAK ⚠️</div>
+  </div>
+
+  <div class="log-area">
+    <div *ngFor="let log of combat.battleLog().slice().reverse()">
+      {{ log }}
+    </div>
+  </div>
+
+  <div class="unit-area player-area">
+    <h3>{{ combat.player().name }}</h3>
+
+    <div class="bar-container">
+      <div class="hp-bar" [style.width.%]="(combat.player().hp / combat.player().maxHp) * 100"></div>
+      <span class="text">{{ combat.player().hp }} / {{ combat.player().maxHp }}</span>
+    </div>
+
+    <div class="bar-container mp-container">
+      <div class="mp-bar" [style.width.%]="(combat.player().mp / combat.player().maxMp) * 100"></div>
+      <span class="text">{{ combat.player().mp }} / {{ combat.player().maxMp }}</span>
+    </div>
+
+    <div class="actions">
+
+      <div class="combat-btns">
+        <button (click)="onPlayerAttack()"
+          [disabled]="combat.enemy().isDead || combat.player().isDead || !combat.isPlayerTurn()">
+          🗡️ 普攻
+        </button>
+
+        <button (click)="combat.playerGuard()" class="guard-btn"
+          [disabled]="combat.enemy().isDead || combat.player().isDead || !combat.isPlayerTurn()">
+          🛡️ 格擋 (70%)
+        </button>
+      </div>
+
+      <div class="combat-btns" style="margin-top: 5px;">
+        <button (click)="combat.playerSkill()" class="skill-btn"
+          [disabled]="combat.enemy().isDead || combat.player().isDead || !combat.isPlayerTurn() || combat.player().mp < 20">
+          🔥 重擊 (20 MP)
+        </button>
+      </div>
+
+      <button (click)="combat.resetBattle()" class="reset-btn">
+        🔄 重置戰鬥
+      </button>
+    </div>
+  </div>
+
+</div>
