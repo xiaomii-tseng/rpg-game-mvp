@@ -1,7 +1,8 @@
 // src/app/features/combat/services/combat-engine.service.ts
 import { Injectable, signal } from '@angular/core';
-import { Enemy, Player, Unit } from '../../../core/models/unit.model';
-
+import { Enemy, Player } from '../../../core/models/unit.model';
+import { Item } from '../../../core/models/item.model';
+import { ENEMY_TEMPLATES, EnemyTemplate } from '../../../core/models/unit.model';
 @Injectable({
   providedIn: 'root'
 })
@@ -9,15 +10,21 @@ export class CombatEngineService {
 
   // 使用 Angular 17+ 的 Signal，這樣 UI 會自動更新，不用寫 RxJS 訂閱
   player = signal<Player>(this.createDummyPlayer());
-  enemy = signal<Enemy>(this.createDummyEnemy());
+  enemy = signal<Enemy>(this.generateEnemy(1));
   isPlayerTurn = signal<boolean>(true);
   battleLog = signal<string[]>(['戰鬥開始！']);
-  constructor() { }
 
+  constructor() {
+    this.loadData(); // 1. 程式一啟動，先嘗試讀檔
+  }
+
+  // --- 設定：Break ---
   private stunCount = 0;
+  // --- 設定：藥水攜帶上限 ---
+  private readonly MAX_POTIONS = 3;
 
   // --- 初始化假資料 (MVP 專用) ---
-  private createDummyPlayer(): Player { // 回傳 Player
+  private createDummyPlayer(): Player {
     return {
       type: 'player',
       id: 'p1', name: '勇者',
@@ -25,19 +32,89 @@ export class CombatEngineService {
       mp: 50, maxMp: 50,
       xp: 0, level: 1,
       isDead: false,
-      stats: { atk: 10, speed: 10 }
+      equipment: {},
+      stats: { minAtk: 80, maxAtk: 120, speed: 10 },
+
+      // ⭐ 修改這裡：一開始就送一瓶藥水
+      inventory: [
+        {
+          id: 'starter-potion', // 給個固定 ID
+          name: '🍷 紅色藥水 (測試)',
+          type: 'potion',
+          rarity: 'common',
+          stats: { hp: 30 },
+          description: '新手禮包，出門在外必備',
+          price: 5
+        }, {
+          id: 'starter-potion', // 給個固定 ID
+          name: '🍷 紅色藥水 (測試)',
+          type: 'potion',
+          rarity: 'common',
+          stats: { hp: 30 },
+          description: '新手禮包，出門在外必備',
+          price: 5
+        }, {
+          id: 'starter-potion', // 給個固定 ID
+          name: '🧪 藍色藥水 (測試)',
+          type: 'potion',
+          rarity: 'common',
+          stats: { mp: 30 },
+          description: '新手禮包，出門在外必備',
+          price: 5
+        }
+      ]
     };
   }
 
-  private createDummyEnemy(): Enemy { // 回傳 Enemy
+  // --- 怪物工廠 ---
+  private generateEnemy(playerLevel: number): Enemy {
+    // 1. 篩選：找出等級適合的怪物 (例如：玩家等級 +1 ~ -2 範圍內的怪)
+    // 這樣玩家 Lv.3 時，可能會遇到 Lv.1 木樁、Lv.2 史萊姆、Lv.3 蝙蝠，偶爾遇到 Lv.4
+    // 如果找不到 (例如剛開始)，就回傳最爛的那隻
+
+    let candidates = ENEMY_TEMPLATES.filter(t => t.level <= playerLevel + 1);
+
+    // 如果篩選出來是空的 (防呆)，就給第一隻 (木樁)
+    if (candidates.length === 0) {
+      candidates = [ENEMY_TEMPLATES[0]];
+    }
+
+    // 2. 從候選名單中隨機抽一隻
+    const randomIndex = Math.floor(Math.random() * candidates.length);
+    const template = candidates[randomIndex];
+
+    // 3. 回傳怪物 (直接套用樣板數值，不進行倍率放大)
     return {
       type: 'enemy',
-      id: 'e1', name: '測試木樁',
-      hp: 100, maxHp: 100,
-      shield: 50, maxShield: 50,
+      id: Date.now().toString(),
+      name: template.name,
+
+      // ⭐ 這裡也要把 level 和 xpReward 帶入 Enemy 實體
+      // (雖然 Enemy 介面我們剛剛沒強制加這兩個欄位，但建議加上去比較好顯示)
+      // 如果你的 IDE 報錯說 Enemy 沒有 level，請回到 Unit 介面加上去
+      // 這裡我們先假設你會加，或是用 ...template 混進去
+
+      // 直接使用樣板數值
+      maxHp: template.maxHp,
+      hp: template.maxHp,
+      maxShield: template.maxShield,
+      shield: template.maxShield,
+
       isDead: false,
-      stats: { atk: 5, speed: 5 }
-    };
+      isBroken: false,
+      isCharging: false,
+
+      stats: {
+        minAtk: template.minAtk,
+        maxAtk: template.maxAtk,
+        speed: template.speed
+      },
+
+      // 為了讓勝利結算能讀到，我們把這兩個屬性掛上去
+      // (這需要你更新 unit.model.ts 的 Enemy 介面，如果不更新，可以用 as any 強轉，但不推薦)
+      ...{ level: template.level, xpReward: template.xpReward }
+    } as Enemy & { level: number, xpReward: number };
+    // ^ 這裡用了型別斷言，最正確的做法是去 model 幫 Enemy 加上 level 和 xpReward
   }
 
   // --- 核心互動：玩家攻擊 ---
@@ -50,8 +127,8 @@ export class CombatEngineService {
     // 1. 傷害公式 (這裡先簡單寫)
     // 如果怪物有盾，攻擊力打折 (例如只剩 20%)，但扣除護盾
     // 如果怪物破盾 (Broken)，傷害 100%
-
-    let finalDamage = p.stats.atk;
+    let rawDamage = this.calculateDamage(p.stats.minAtk, p.stats.maxAtk);
+    let finalDamage = rawDamage;
     const breakPower = 10; // 假設玩家破盾值是 10
 
     if (e.shield > 0) {
@@ -59,7 +136,7 @@ export class CombatEngineService {
       e.shield -= breakPower;
       if (e.shield < 0) e.shield = 0;
 
-      finalDamage = Math.floor(p.stats.atk * 0.2); // 有盾減傷 80%
+      finalDamage = Math.floor(rawDamage * 0.2); // 有盾減傷 80%
       this.addLog(`玩家攻擊！造成 ${finalDamage} 傷害 (護盾受損 -${breakPower})`);
 
       if (e.shield === 0) {
@@ -78,14 +155,10 @@ export class CombatEngineService {
     // ⭐ 3. 結算與回合切換 (這裡是修改的重點)
     // ===========================
 
-    // 情況 A: 怪物死了 -> 戰鬥結束
+    // 檢查勝利
     if (e.hp <= 0) {
-      e.hp = 0;
-      e.isDead = true;
-      this.addLog('🏆 戰鬥勝利！獲得 破舊的長劍 (假)');
-
-      // 更新 UI 並結束函式 (不讓怪物行動)
-      this.enemy.set({ ...e });
+      this.handleVictory(e, p); // ✅ 改成呼叫共用函式
+      this.saveData();
       return;
     }
 
@@ -124,7 +197,7 @@ export class CombatEngineService {
     let damageMult = 1.5; // 基礎倍率 150%
     let breakBonus = 20;  // 額外破盾值 (普攻是 10)
 
-    let finalDamage = Math.floor(p.stats.atk * damageMult);
+    let finalDamage = Math.floor(this.calculateDamage(p.stats.minAtk, p.stats.maxAtk) * damageMult);
 
     if (e.shield > 0) {
       // --- 護盾階段 ---
@@ -153,10 +226,7 @@ export class CombatEngineService {
 
     // 檢查勝利與回合切換 (這部分跟普攻一樣，可以直接複製貼上，或是抽成共用函式)
     if (e.hp <= 0) {
-      e.hp = 0;
-      e.isDead = true;
-      this.addLog('🏆 戰鬥勝利！');
-      this.enemy.set({ ...e });
+      this.handleVictory(e, p);
       return;
     }
 
@@ -218,7 +288,7 @@ export class CombatEngineService {
 
       this.addLog('🔥 怪物釋放必殺技【毀滅重擊】！');
 
-      let bigDmg = e.stats.atk * 3; // 3倍傷害！
+      let bigDmg = Math.floor(this.calculateDamage(e.stats.minAtk, e.stats.maxAtk) * 3);// 3倍傷害
       let isBlocked = false;
 
       // 🛡️ 判定格擋
@@ -266,7 +336,7 @@ export class CombatEngineService {
 
     } else {
       // ⚔️ 60% 機率：普通攻擊
-      let dmg = e.stats.atk;
+      let dmg = this.calculateDamage(e.stats.minAtk, e.stats.maxAtk);
       let isBlocked = false;
 
       if (p.isBlocking) {
@@ -320,17 +390,303 @@ export class CombatEngineService {
     // this.addLog('--- 輪到你的回合 ---'); // 選用：看你想不想顯示這行
   }
 
-  // 重置戰鬥
+  // 重置戰鬥 (下一關)
   resetBattle() {
-    this.player.set(this.createDummyPlayer());
-    this.enemy.set(this.createDummyEnemy());
-    this.battleLog.set(['戰鬥重置']);
-    // ⭐ 修正：必須重置所有計數器
+    // 1. 抓取「當前」的玩家狀態 (包含裝備、背包、等級)
+    const p = this.player();
+
+    // 2. 只恢復狀態，不重置資料
+    p.isDead = false;     // 復活
+    p.isBlocking = false; // 放下盾牌
+
+    // 注意：這裡我們「沒有」清空 inventory 或 equipment，所以裝備會留著
+
+    // 3. 怪物：生成一隻新的
+    const newEnemy = this.generateEnemy(p.level);
+
+    // 4. 更新 Signal
+    // 使用 { ...p } 確保 Angular 偵測到物件變化，但內容是舊的 p
+    this.player.set({ ...p });
+    this.enemy.set(newEnemy);
+
+    // 5. 重置計數器與 Log
     this.stunCount = 0;
-    this.isPlayerTurn.set(true); // 確保按鈕解鎖
+    this.isPlayerTurn.set(true);
+
+    // Log 會被清空是正常的，因為這是「新的一場戰鬥」
+    this.battleLog.set(['--- 新的戰鬥開始 ---']);
+    this.saveData();
   }
 
   private addLog(msg: string) {
     this.battleLog.update(logs => [...logs, msg]);
+  }
+
+  // --- 簡單的掉落工廠 (浮動傷害版) ---
+  private generateRandomLoot(): Item {
+    const dice = Math.random();
+
+    // 🎲 0 ~ 0.2 : 紅水 (20%)
+    if (dice < 0.2) {
+      return {
+        id: Date.now().toString(),
+        name: '🍷 紅色藥水',
+        type: 'potion',
+        rarity: 'common',
+        stats: { hp: 30 },
+        description: '恢復少量生命',
+        price: 5
+      };
+    }
+
+    // 🎲 0.2 ~ 0.4 : 藍水 (20%) ⭐ 新增這段
+    if (dice >= 0.2 && dice < 0.4) {
+      return {
+        id: Date.now().toString(),
+        name: '🧪 藍色藥水',
+        type: 'potion',
+        rarity: 'common',
+        stats: { mp: 20 }, // 補 20 MP
+        description: '恢復少量魔力',
+        price: 10
+      };
+    }
+
+    const isRare = Math.random() > 0.7; // 30% 機率掉稀有
+
+    // 🎲 計算浮動數值
+    let min, max;
+
+    if (isRare) {
+      // 稀有武器：例如 15 ~ 25
+      min = Math.floor(Math.random() * 5) + 15;
+      max = min + Math.floor(Math.random() * 10) + 5;
+    } else {
+      // 普通武器：例如 3 ~ 8
+      min = Math.floor(Math.random() * 3) + 3;
+      max = min + Math.floor(Math.random() * 5) + 2;
+    }
+
+    return {
+      id: Date.now().toString(),
+      name: isRare ? '🔥 烈焰之劍' : '🔪 破舊的匕首',
+      type: 'weapon',
+      rarity: isRare ? 'rare' : 'common',
+      stats: {
+        minAtk: min,
+        maxAtk: max
+      },
+      description: isRare ? '燃燒著火焰的魔法劍' : '生鏽的鐵片，勉強能用',
+      price: isRare ? 100 : 10
+    };
+  }
+
+  // --- 使用物品 (整合了 喝水 與 穿裝備) ---
+  useItem(item: Item) {
+    const p = this.player();
+    const e = this.enemy(); // ⭐ 1. 取得怪物狀態，用來判斷是否在戰鬥中
+
+    // ===========================
+    // 情況 A: 喝藥水 (Potion)
+    // ===========================
+    if (item.type === 'potion') {
+
+      // --- 情況 A-1: 紅水 (補血) ---
+      if (item.stats?.hp) {
+        if (p.hp >= p.maxHp) {
+          this.addLog('❌ 生命值已滿，不需要喝藥水。');
+          return;
+        }
+        const oldVal = p.hp;
+        p.hp += item.stats.hp;
+        if (p.hp > p.maxHp) p.hp = p.maxHp;
+        this.addLog(`🍷 你喝下了 [${item.name}]，恢復了 ${p.hp - oldVal} 點生命！`);
+      }
+
+      // --- 情況 A-2: 藍水 (補魔) ---
+      else if (item.stats?.mp) {
+        if (p.mp >= p.maxMp) {
+          this.addLog('❌ 魔力值已滿，不需要喝藥水。');
+          return;
+        }
+        const oldVal = p.mp;
+        p.mp += item.stats.mp;
+        if (p.mp > p.maxMp) p.mp = p.maxMp;
+        this.addLog(`🧪 你喝下了 [${item.name}]，恢復了 ${p.mp - oldVal} 點魔力！`);
+      }
+
+      // --- 共用邏輯：消耗物品 & 回合計算 ---
+
+      // 1. 從背包移除
+      const index = p.inventory.indexOf(item);
+      if (index > -1) p.inventory.splice(index, 1);
+
+      // 2. 戰鬥中要消耗回合
+      if (!e.isDead) {
+        this.isPlayerTurn.set(false);
+        this.addLog('⏳ 喝藥水花費了一些時間...');
+        this.player.set({ ...p }); // 更新 UI
+
+        setTimeout(() => {
+          this.monsterTurn();
+        }, 1000);
+        return;
+      }
+
+      // 戰鬥外不消耗回合
+      this.player.set({ ...p });
+      return;
+    }
+
+    // ===========================
+    // 情況 B: 穿裝備 (Weapon)
+    // ===========================
+    if (item.type === 'weapon') {
+      // 1. 脫舊裝備
+      if (p.equipment.weapon) {
+        p.inventory.push(p.equipment.weapon);
+      }
+
+      // 2. 穿新裝備
+      const index = p.inventory.indexOf(item);
+      if (index > -1) {
+        p.inventory.splice(index, 1);
+      }
+      p.equipment.weapon = item;
+      this.addLog(`🦾 裝備了 [${item.name}]！`);
+
+      // 3. 重算數值 (含等級成長)
+      const baseMin = p.stats.minAtk + (p.level - 1) * 2;
+      const baseMax = p.stats.maxAtk + (p.level - 1) * 3;
+      const weaponMin = item.stats?.minAtk || 0;
+      const weaponMax = item.stats?.maxAtk || 0;
+
+      p.stats.minAtk = baseMin + weaponMin;
+      p.stats.maxAtk = baseMax + weaponMax;
+
+      this.addLog(`💪 攻擊力提升為：${p.stats.minAtk} ~ ${p.stats.maxAtk}`);
+
+      // 裝備通常不算回合 (或是你想算也可以，這裡目前是不算)
+      this.player.set({ ...p });
+    }
+    this.saveData();
+  }
+
+  private calculateDamage(min: number, max: number): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  // 統一處理勝利邏輯 (避免普攻有掉寶，技能卻忘了寫)
+  private handleVictory(e: Enemy, p: Player) {
+    e.hp = 0;
+    e.isDead = true;
+
+    // 經驗值
+    const monsterXp = (e as any).xpReward || 0;
+    this.gainXp(monsterXp);
+
+    // 產生戰利品
+    const loot = this.generateRandomLoot();
+
+    // 判斷戰利品進背包 (加入藥水限制)
+    if (loot.type === 'potion') {
+      const currentPotions = p.inventory.filter(i => i.type === 'potion').length;
+
+      if (currentPotions >= this.MAX_POTIONS) {
+        // ❌ 背包滿了
+        this.addLog(`🎁 怪物掉落了 [${loot.name}]，但你背包藥水已滿 (${this.MAX_POTIONS}/${this.MAX_POTIONS})，只好留在原地...`);
+      } else {
+        // ✅ 還有空間
+        p.inventory.push(loot);
+        this.addLog(`🏆 戰鬥勝利！`);
+        this.addLog(`🎁 獲得補給：[${loot.name}] (HP +${loot.stats?.hp})`);
+      }
+    } else {
+      // 裝備類直接撿 (假設裝備無限背包，或是之後再做限制)
+      p.inventory.push(loot);
+      this.addLog(`🏆 戰鬥勝利！`);
+      this.addLog(`🎁 獲得戰利品：[${loot.name}] (ATK: ${loot.stats?.minAtk} ~ ${loot.stats?.maxAtk})`);
+    }
+
+
+    this.addLog(`🏆 戰鬥勝利！`);
+    this.addLog(`🎁 獲得戰利品：[${loot.name}] (ATK: ${loot.stats?.minAtk} ~ ${loot.stats?.maxAtk})`);
+
+    // 3. 更新 UI
+    this.enemy.set({ ...e });
+    this.player.set({ ...p });
+  }
+
+  // --- 獲得經驗值與升級邏輯 ---
+  private gainXp(amount: number) {
+    const p = this.player();
+
+    // 1. 獲得經驗
+    p.xp += amount;
+    this.addLog(`✨ 獲得經驗值：${amount} XP`);
+
+    // 2. 判斷升級 (使用 while 迴圈，以防一次獲得太多經驗連升兩級)
+    // 設定：升級所需經驗 = 目前等級 * 100 (Lv1->2 要 100xp, Lv2->3 要 200xp...)
+    let requiredXp = p.level * 100;
+
+    while (p.xp >= requiredXp) {
+      // --- 發生升級！ ---
+      p.xp -= requiredXp; // 扣除門檻值 (保留溢出的 XP)
+      p.level++;
+
+      // 3. 提升數值 (成長曲線)
+      p.maxHp += 20;  // 血量上限 +20
+      p.maxMp += 10;  // 魔力上限 +10
+
+      // 基礎攻擊力提升
+      p.stats.minAtk += 2;
+      p.stats.maxAtk += 3;
+
+      // 4. 升級福利：血魔全滿！
+      p.hp = p.maxHp;
+      p.mp = p.maxMp;
+
+      this.addLog(`🎉 恭喜升級！(Lv.${p.level}) 生命/魔力全滿，能力值提升！`);
+
+      // 重新計算下一級門檻
+      requiredXp = p.level * 100;
+    }
+
+    // 更新 UI
+    this.player.set({ ...p });
+  }
+
+  // --- 💾 存檔系統 (LocalStorage) ---
+  private saveData() {
+    const data = {
+      player: this.player(),
+      enemy: this.enemy(),
+      // 也可以存 log，但通常讀檔時清空 log 比較乾淨
+    };
+    localStorage.setItem('my_rpg_save_v1', JSON.stringify(data));
+    // console.log('Game Saved!'); // 測試時可以打開看
+  }
+
+  private loadData() {
+    const saved = localStorage.getItem('my_rpg_save_v1');
+    if (saved) {
+      const data = JSON.parse(saved);
+
+      // 恢復玩家狀態
+      this.player.set(data.player);
+
+      // 恢復怪物狀態 (或是你想讀檔時直接生一隻新的也可以)
+      this.enemy.set(data.enemy);
+
+      this.addLog('📂 讀取存檔成功！歡迎回來，勇者。');
+    } else {
+      this.addLog('🌟 歡迎來到新的冒險！');
+    }
+  }
+
+  // --- 🗑️ 刪除存檔 (讓玩家可以重玩) ---
+  hardReset() {
+    localStorage.removeItem('my_rpg_save_v1');
+    location.reload(); // 強制重新整理頁面
   }
 }

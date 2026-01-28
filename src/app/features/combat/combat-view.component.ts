@@ -73,4 +73,8 @@ export class CombatViewComponent {
       this.spawnDamageText('BREAK!', 'break', false);
     }
   }
+
+  getPotionCount(): number {
+    return this.combat.player().inventory.filter(i => i.type === 'potion').length;
+  }
 }

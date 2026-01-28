@@ -5,8 +5,8 @@
   </app-damage-text>
 
   <div class="unit-area enemy-area">
-    <h2>{{ combat.enemy().name }}</h2>
-    <div *ngIf="combat.enemy().isCharging" class="status-text charging">
+    <h2>Lv.{{ combat.enemy().level }} {{ combat.enemy().name }}</h2>
+    <div *ngIf="combat.enemy().isCharging && !combat.enemy().isDead" class="status-text charging">
       🔥 蓄力中 (準備釋放必殺技！) 🔥
     </div>
     <div class="bar-container">
@@ -21,7 +21,7 @@
       <span class="text">Shield: {{ combat.enemy().shield }}</span>
     </div>
 
-    <div *ngIf="combat.enemy().isBroken" class="status-text">⚠️ BREAK ⚠️</div>
+    <div *ngIf="combat.enemy().isBroken && !combat.enemy().isDead" class="status-text">⚠️ BREAK ⚠️</div>
   </div>
 
   <div class="log-area">
@@ -31,7 +31,24 @@
   </div>
 
   <div class="unit-area player-area">
-    <h3>{{ combat.player().name }}</h3>
+    <h3>Lv.{{ combat.player().level }} {{ combat.player().name }}</h3>
+
+    <div class="player-stats">
+      💪 總攻擊力：
+      <span class="highlight">
+        {{ combat.player().stats.minAtk }} - {{ combat.player().stats.maxAtk }}
+      </span>
+    </div>
+
+    <div class="equipment-slot" [class.empty]="!combat.player().equipment.weapon">
+      <span>✋ 主手：</span>
+      <span *ngIf="combat.player().equipment.weapon; else noWeapon">
+        {{ combat.player().equipment.weapon?.name }}
+        <span class="weapon-stat">(數值: {{ combat.player().equipment.weapon?.stats?.minAtk }}-{{
+          combat.player().equipment.weapon?.stats?.maxAtk }})</span>
+      </span>
+      <ng-template #noWeapon><span class="empty-text">空手</span></ng-template>
+    </div>
 
     <div class="bar-container">
       <div class="hp-bar" [style.width.%]="(combat.player().hp / combat.player().maxHp) * 100"></div>
@@ -41,6 +58,12 @@
     <div class="bar-container mp-container">
       <div class="mp-bar" [style.width.%]="(combat.player().mp / combat.player().maxMp) * 100"></div>
       <span class="text">{{ combat.player().mp }} / {{ combat.player().maxMp }}</span>
+    </div>
+
+    <div class="bar-container xp-container">
+      <div class="xp-bar" [style.width.%]="(combat.player().xp / (combat.player().level * 100)) * 100">
+      </div>
+      <span class="text">XP: {{ combat.player().xp }} / {{ combat.player().level * 100 }}</span>
     </div>
 
     <div class="actions">
@@ -53,21 +76,51 @@
 
         <button (click)="combat.playerGuard()" class="guard-btn"
           [disabled]="combat.enemy().isDead || combat.player().isDead || !combat.isPlayerTurn()">
-          🛡️ 格擋 (70%)
+          🛡️ 格擋
         </button>
-      </div>
 
-      <div class="combat-btns" style="margin-top: 5px;">
         <button (click)="combat.playerSkill()" class="skill-btn"
           [disabled]="combat.enemy().isDead || combat.player().isDead || !combat.isPlayerTurn() || combat.player().mp < 20">
-          🔥 重擊 (20 MP)
+          🔥 重擊
         </button>
       </div>
 
       <button (click)="combat.resetBattle()" class="reset-btn">
-        🔄 重置戰鬥
+        <ng-container *ngIf="combat.enemy().isDead; else resetText">
+          ➡️ 下一場戰鬥 (Next Battle)
+        </ng-container>
+        <ng-template #resetText>
+          🔄 重置戰鬥 (Reset)
+        </ng-template>
       </button>
     </div>
   </div>
 
+  <div class="inventory-area" *ngIf="combat.player().inventory.length > 0">
+    <h4>🎒 背包 ({{ combat.player().inventory.length }})
+      <span style="font-size: 0.8em; color: #2ecc71; margin-left: 10px;">
+        藥水: {{ getPotionCount() }} / 3
+      </span>
+    </h4>
+    <div class="item-list">
+      <div *ngFor="let item of combat.player().inventory" class="item-card clickable" [class]="item.rarity"
+        (click)="combat.useItem(item)">
+        <span class="item-name">{{ item.name }}</span>
+        <span class="item-stat" *ngIf="item.stats?.minAtk">
+          ⚔️ {{ item.stats?.minAtk }} - {{ item.stats?.maxAtk }}
+        </span>
+        <span class="item-stat heal" *ngIf="item.stats?.hp">
+          💚 +{{ item.stats?.hp }}
+        </span>
+        <span class="item-stat mana" *ngIf="item.stats?.mp">
+          💙 +{{ item.stats?.mp }}
+        </span>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top: 20px; text-align: center;">
+    <button (click)="combat.hardReset()" style="background: #c0392b; font-size: 12px; padding: 5px;">
+      🗑️ 刪除存檔重來 (Hard Reset)
+    </button>
+  </div>
 </div>
