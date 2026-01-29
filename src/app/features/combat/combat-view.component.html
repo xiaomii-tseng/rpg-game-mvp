@@ -4,6 +4,13 @@
     [y]="text.y">
   </app-damage-text>
 
+  <!-- 顯示關卡數 -->
+  <div class="stage-info" style="text-align: center; color: #f39c12; font-weight: bold; margin-bottom: 5px;">
+    🏁 Stage: {{ combat.currentStage() }} / {{ combat.maxStage }}
+    (⭐ {{ combat.mapDifficulty() }})
+  </div>
+
+  <!-- 怪物區域 -->
   <div class="unit-area enemy-area">
     <h2>Lv.{{ combat.enemy().level }} {{ combat.enemy().name }}</h2>
     <div *ngIf="combat.enemy().isCharging && !combat.enemy().isDead" class="status-text charging">
@@ -24,12 +31,14 @@
     <div *ngIf="combat.enemy().isBroken && !combat.enemy().isDead" class="status-text">⚠️ BREAK ⚠️</div>
   </div>
 
+  <!-- 戰鬥資訊 -->
   <div class="log-area">
     <div *ngFor="let log of combat.battleLog().slice().reverse()">
       {{ log }}
     </div>
   </div>
 
+  <!-- 玩家區域 -->
   <div class="unit-area player-area">
     <h3>Lv.{{ combat.player().level }} {{ combat.player().name }}</h3>
 
@@ -96,6 +105,7 @@
     </div>
   </div>
 
+  <!-- 背包 -->
   <div class="inventory-area" *ngIf="combat.player().inventory.length > 0">
     <h4>🎒 背包 ({{ combat.player().inventory.length }})
       <span style="font-size: 0.8em; color: #2ecc71; margin-left: 10px;">
@@ -118,6 +128,8 @@
       </div>
     </div>
   </div>
+
+  <!-- 刪檔按鈕 -->
   <div style="margin-top: 20px; text-align: center;">
     <button (click)="combat.hardReset()" style="background: #c0392b; font-size: 12px; padding: 5px;">
       🗑️ 刪除存檔重來 (Hard Reset)

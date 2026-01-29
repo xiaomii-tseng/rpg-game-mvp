@@ -56,9 +56,16 @@ export type Unit = Player | Enemy;
 // ⭐ 新增：怪物圖鑑系統 (用於生成工廠)
 // ==========================================
 
+// 定義怪物的階級
+export type EnemyRole = 'normal' | 'elite' | 'boss'; 
+// normal=小怪, elite=小王(5/10關), boss=大王(15關)
+
 // 5. 怪物樣板 (定義一隻怪物原本長怎樣)
 export interface EnemyTemplate {
+  id: string;        // 建議加個 id 方便辨識
   name: string;
+  mapId: string;     // ⭐ 新增：這隻怪屬於哪張地圖 (例如 'map_01_forest')
+  role: EnemyRole;   // ⭐ 新增：它是哪種階級
   level: number;
   maxHp: number;
   maxShield: number;
@@ -68,48 +75,17 @@ export interface EnemyTemplate {
   xpReward: number;
 }
 
-// 6. 怪物資料庫 (你可以隨時在這裡新增怪物)
+// 範例資料：假設這是「Map A (森林)」的怪物池
 export const ENEMY_TEMPLATES: EnemyTemplate[] = [
-  {
-    name: '🪵 訓練木樁',
-    level: 1,
-    maxHp: 50, maxShield: 30,
-    minAtk: 1, maxAtk: 2, speed: 5,
-    xpReward: 10
-  },
-  {
-    name: '🟢 史萊姆',
-    level: 2,
-    maxHp: 80, maxShield: 10,
-    minAtk: 8, maxAtk: 12, speed: 6,
-    xpReward: 25
-  },
-  {
-    name: '🦇 吸血蝙蝠',
-    level: 3,
-    maxHp: 100, maxShield: 20,
-    minAtk: 12, maxAtk: 15, speed: 12,
-    xpReward: 40
-  },
-  {
-    name: '🛡️ 哥布林戰士',
-    level: 5,
-    maxHp: 150, maxShield: 50,
-    minAtk: 15, maxAtk: 20, speed: 8,
-    xpReward: 80
-  },
-  {
-    name: '🐺 荒原狼',
-    level: 7,
-    maxHp: 200, maxShield: 0,
-    minAtk: 20, maxAtk: 25, speed: 15,
-    xpReward: 120
-  },
-  {
-    name: '🐲 幼龍 (BOSS)',
-    level: 10,
-    maxHp: 500, maxShield: 100,
-    minAtk: 30, maxAtk: 50, speed: 10,
-    xpReward: 500
-  }
+  // --- 小怪 (Normal) ---
+  { id: 'm1', name: '🟢 史萊姆', mapId: 'map_a', role: 'normal', level: 1, maxHp: 80, maxShield: 0, minAtk: 8, maxAtk: 12, speed: 6, xpReward: 25 },
+  { id: 'm2', name: '🦇 吸血蝙蝠', mapId: 'map_a', role: 'normal', level: 2, maxHp: 100, maxShield: 0, minAtk: 12, maxAtk: 15, speed: 12, xpReward: 40 },
+  // ... (你可以自己補更多小怪)
+
+  // --- 小王 (Elite - 出現在 5, 10 關) ---
+  { id: 'e1', name: '🛡️ 哥布林隊長', mapId: 'map_a', role: 'elite', level: 5, maxHp: 300, maxShield: 50, minAtk: 25, maxAtk: 35, speed: 9, xpReward: 150 },
+  { id: 'e2', name: '🐺 荒原狼王', mapId: 'map_a', role: 'elite', level: 5, maxHp: 250, maxShield: 0, minAtk: 35, maxAtk: 45, speed: 16, xpReward: 160 },
+
+  // --- 大王 (Boss - 出現在 15 關) ---
+  { id: 'b1', name: '🐲 幼龍', mapId: 'map_a', role: 'boss', level: 10, maxHp: 1000, maxShield: 200, minAtk: 50, maxAtk: 80, speed: 12, xpReward: 1000 },
 ];

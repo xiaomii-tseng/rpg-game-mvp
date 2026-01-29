@@ -1,6 +1,6 @@
 // src/app/features/combat/services/combat-engine.service.ts
 import { Injectable, signal } from '@angular/core';
-import { Enemy, Player } from '../../../core/models/unit.model';
+import { Enemy, EnemyRole, Player } from '../../../core/models/unit.model';
 import { Item } from '../../../core/models/item.model';
 import { ENEMY_TEMPLATES, EnemyTemplate } from '../../../core/models/unit.model';
 @Injectable({
@@ -8,9 +8,16 @@ import { ENEMY_TEMPLATES, EnemyTemplate } from '../../../core/models/unit.model'
 })
 export class CombatEngineService {
 
+  // ⭐ 新增：關卡進度狀態
+  currentStage = signal<number>(1); // 預設第 1 關
+  mapDifficulty = signal<number>(1); // 預設 1 星難度
+  currentMapId = 'map_a';           // 預設打地圖 A
+  maxStage = 15;                    // 總共 15 關
+
+
   // 使用 Angular 17+ 的 Signal，這樣 UI 會自動更新，不用寫 RxJS 訂閱
   player = signal<Player>(this.createDummyPlayer());
-  enemy = signal<Enemy>(this.generateEnemy(1));
+  enemy = signal<Enemy>(this.generateEnemy());
   isPlayerTurn = signal<boolean>(true);
   battleLog = signal<string[]>(['戰鬥開始！']);
 
@@ -66,55 +73,53 @@ export class CombatEngineService {
     };
   }
 
-  // --- 怪物工廠 ---
-  private generateEnemy(playerLevel: number): Enemy {
-    // 1. 篩選：找出等級適合的怪物 (例如：玩家等級 +1 ~ -2 範圍內的怪)
-    // 這樣玩家 Lv.3 時，可能會遇到 Lv.1 木樁、Lv.2 史萊姆、Lv.3 蝙蝠，偶爾遇到 Lv.4
-    // 如果找不到 (例如剛開始)，就回傳最爛的那隻
+  // ⭐ 生成怪物的邏輯
+  private generateEnemy(): Enemy {
+    const stage = this.currentStage();
+    const star = this.mapDifficulty();
 
-    let candidates = ENEMY_TEMPLATES.filter(t => t.level <= playerLevel + 1);
-
-    // 如果篩選出來是空的 (防呆)，就給第一隻 (木樁)
-    if (candidates.length === 0) {
-      candidates = [ENEMY_TEMPLATES[0]];
+    // 1. 決定要生哪種階級的怪
+    let targetRole: EnemyRole = 'normal';
+    if (stage === 15) {
+      targetRole = 'boss';
+    } else if (stage === 5 || stage === 10) {
+      targetRole = 'elite';
     }
 
-    // 2. 從候選名單中隨機抽一隻
-    const randomIndex = Math.floor(Math.random() * candidates.length);
-    const template = candidates[randomIndex];
+    // 2. 從資料庫篩選出「目前地圖」且「符合階級」的怪
+    const candidates = ENEMY_TEMPLATES.filter(t =>
+      t.mapId === this.currentMapId && t.role === targetRole
+    );
 
-    // 3. 回傳怪物 (直接套用樣板數值，不進行倍率放大)
+    // (防呆：如果沒篩到，就隨便拿一隻最爛的，避免當機)
+    const template = candidates.length > 0
+      ? candidates[Math.floor(Math.random() * candidates.length)]
+      : ENEMY_TEMPLATES[0];
+
+    // 3. ⭐ 計算星級加成 (Difficulty Multiplier)
+    // 假設每多 1 星，數值提升 20% (1星=1.0, 2星=1.2, 5星=1.8)
+    const multiplier = 1 + (star - 1) * 0.2;
+
     return {
       type: 'enemy',
       id: Date.now().toString(),
       name: template.name,
+      level: template.level, // 顯示用
+      xpReward: Math.floor(template.xpReward * multiplier), // 經驗值也加倍
 
-      // ⭐ 這裡也要把 level 和 xpReward 帶入 Enemy 實體
-      // (雖然 Enemy 介面我們剛剛沒強制加這兩個欄位，但建議加上去比較好顯示)
-      // 如果你的 IDE 報錯說 Enemy 沒有 level，請回到 Unit 介面加上去
-      // 這裡我們先假設你會加，或是用 ...template 混進去
-
-      // 直接使用樣板數值
-      maxHp: template.maxHp,
-      hp: template.maxHp,
-      maxShield: template.maxShield,
-      shield: template.maxShield,
-
-      isDead: false,
-      isBroken: false,
-      isCharging: false,
+      // 數值乘上星級倍率
+      maxHp: Math.floor(template.maxHp * multiplier),
+      hp: Math.floor(template.maxHp * multiplier),
+      maxShield: Math.floor(template.maxShield * multiplier),
+      shield: Math.floor(template.maxShield * multiplier),
 
       stats: {
-        minAtk: template.minAtk,
-        maxAtk: template.maxAtk,
-        speed: template.speed
+        minAtk: Math.floor(template.minAtk * multiplier),
+        maxAtk: Math.floor(template.maxAtk * multiplier),
+        speed: template.speed // 速度通常不建議隨星級提升，不然會太難
       },
-
-      // 為了讓勝利結算能讀到，我們把這兩個屬性掛上去
-      // (這需要你更新 unit.model.ts 的 Enemy 介面，如果不更新，可以用 as any 強轉，但不推薦)
-      ...{ level: template.level, xpReward: template.xpReward }
-    } as Enemy & { level: number, xpReward: number };
-    // ^ 這裡用了型別斷言，最正確的做法是去 model 幫 Enemy 加上 level 和 xpReward
+      // ... 其他屬性
+    } as any;
   }
 
   // --- 核心互動：玩家攻擊 ---
@@ -390,32 +395,27 @@ export class CombatEngineService {
     // this.addLog('--- 輪到你的回合 ---'); // 選用：看你想不想顯示這行
   }
 
-  // 重置戰鬥 (下一關)
+  // ⭐ 修改：戰鬥勝利後的推進邏輯
   resetBattle() {
-    // 1. 抓取「當前」的玩家狀態 (包含裝備、背包、等級)
-    const p = this.player();
+    // 如果怪物死了，關卡 +1
+    if (this.enemy().isDead) {
+      const nextStage = this.currentStage() + 1;
 
-    // 2. 只恢復狀態，不重置資料
-    p.isDead = false;     // 復活
-    p.isBlocking = false; // 放下盾牌
+      // 判斷是否通關
+      if (nextStage > this.maxStage) {
+        this.addLog('🎉 恭喜！你通關了這張地圖！');
+        // 這裡未來可以做結算畫面，或是強制重置回第 1 關但升星級
+        this.currentStage.set(1);
+      } else {
+        this.currentStage.set(nextStage);
+        this.addLog(`➡️ 前進下一關：第 ${nextStage} / ${this.maxStage} 關`);
+      }
+    }
 
-    // 注意：這裡我們「沒有」清空 inventory 或 equipment，所以裝備會留著
-
-    // 3. 怪物：生成一隻新的
-    const newEnemy = this.generateEnemy(p.level);
-
-    // 4. 更新 Signal
-    // 使用 { ...p } 確保 Angular 偵測到物件變化，但內容是舊的 p
-    this.player.set({ ...p });
+    // 生成新怪物 (會自動讀取新的 currentStage 來決定生什麼怪)
+    const newEnemy = this.generateEnemy();
     this.enemy.set(newEnemy);
-
-    // 5. 重置計數器與 Log
-    this.stunCount = 0;
-    this.isPlayerTurn.set(true);
-
-    // Log 會被清空是正常的，因為這是「新的一場戰鬥」
-    this.battleLog.set(['--- 新的戰鬥開始 ---']);
-    this.saveData();
+    // ...
   }
 
   private addLog(msg: string) {
